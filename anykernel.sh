@@ -5,7 +5,7 @@
 # begin properties
 properties() { '
 kernel.string=Lithium kernel
-dev.string=zRyu03
+dev.string=zRyu
 do.devicecheck=1
 do.modules=0
 do.systemless=1
