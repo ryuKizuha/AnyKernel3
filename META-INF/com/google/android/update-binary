@@ -1,16 +1,15 @@
-#!/sbin/sh
+ #!/sbin/sh
 # AnyKernel3 Backend (DO NOT CHANGE)
 # osm0sis @ xda-developers
 
 OUTFD=/proc/self/fd/$2;
 ZIPFILE="$3";
+export ZIPFILE="$3";
 
-BOOTMODE=false;
-ps | grep zygote | grep -v grep >/dev/null && BOOTMODE=true;
+ps | grep zygote | grep -v grep >/dev/null && BOOTMODE=true || BOOTMODE=false;
 $BOOTMODE || ps -A 2>/dev/null | grep zygote | grep -v grep >/dev/null && BOOTMODE=true;
 
-DIR=/sdcard;
-$BOOTMODE || DIR=$(dirname "$ZIPFILE");
+$BOOTMODE && DIR=/sdcard || DIR=$(dirname "$ZIPFILE");
 
 test -d /postinstall/tmp && POSTINSTALL=/postinstall;
 test "$AKHOME" || AKHOME=$POSTINSTALL/tmp/anykernel;
@@ -39,13 +38,12 @@ setup_mountpoint() {
 }
 is_mounted() { $BB mount | $BB grep -q " $1 "; }
 mount_apex() {
-  test -d /system_root/system/apex || return 1;
+  test -d /system/apex || return 1;
   local apex dest loop minorx num;
   setup_mountpoint /apex;
-  minorx=1;
-  test -e /dev/block/loop1 && minorx=$($BB ls -l /dev/block/loop1 | $BB awk '{ print $6 }');
+  test -e /dev/block/loop1 && minorx=$($BB ls -l /dev/block/loop1 | $BB awk '{ print $6 }') || minorx=1;
   num=0;
-  for apex in /system_root/system/apex/*; do
+  for apex in /system/apex/*; do
     dest=/apex/$($BB basename $apex .apex);
     test "$dest" == /apex/com.android.runtime.release && dest=/apex/com.android.runtime;
     $BB mkdir -p $dest;
@@ -109,44 +107,34 @@ mount_all() {
         $BB mount --move /system /system_root;
       fi;
       if [ $? != 0 ]; then
-        ($BB umount /system;
-        $BB umount -l /system) 2>/dev/null;
-        if [ "$(getprop ro.boot.dynamic_partitions 2>/dev/null)" ]; then
-          test -e /dev/block/mapper/system || local slot=$(getprop ro.boot.slot_suffix 2>/dev/null);
-          $BB mount -o ro -t auto /dev/block/mapper/vendor$slot /vendor;
-          $BB mount -o ro -t auto /dev/block/mapper/system$slot /system_root;
-        else
-          test -e /dev/block/bootdevice/by-name/system || local slot=$(getprop ro.boot.slot_suffix 2>/dev/null);
-          $BB mount -o ro -t auto /dev/block/bootdevice/by-name/system$slot /system_root;
-        fi;
+        $BB umount /system;
+        $BB umount -l /system 2>/dev/null;
+        test -e /dev/block/bootdevice/by-name/system || local slot=$(getprop ro.boot.slot_suffix 2>/dev/null);
+        $BB mount -o ro -t auto /dev/block/bootdevice/by-name/system$slot /system_root;
       fi;
     ;;
   esac;
   if is_mounted /system_root; then
-    mount_apex;
     if [ -f /system_root/build.prop ]; then
       $BB mount -o bind /system_root /system;
     else
       $BB mount -o bind /system_root/system /system;
     fi;
   fi;
+  mount_apex;
 }
 umount_all() {
-  (if [ ! -d /postinstall/tmp ]; then
+  (umount_apex;
+  if [ ! -d /postinstall/tmp ]; then
     $BB umount /system;
     $BB umount -l /system;
-    umount_apex;
     if [ -e /system_root ]; then
       $BB umount /system_root;
       $BB umount -l /system_root;
     fi;
-    $BB umount /mnt/system;
-    $BB umount -l /mnt/system;
   fi;
   umount /vendor;
   umount -l /vendor;
-  $BB umount /mnt/vendor;
-  $BB umount -l /mnt/vendor;
   if [ "$UMOUNT_DATA" ]; then
     $BB umount /data;
     $BB umount -l /data;
@@ -171,18 +159,10 @@ setup_env() {
       local propdir propfile propval;
       for propdir in / /system_root /system /vendor /odm /product; do
         for propfile in default.prop build.prop; do
-          if [ "$propval" ]; then
-            break 2;
-          else
-            propval="$(file_getprop $propdir/$propfile $1 2>/dev/null)";
-          fi;
+          test "$propval" && break 2 || propval="$(file_getprop $propdir/$propfile $1 2>/dev/null)";
         done;
       done;
-      if [ "$propval" ]; then
-        echo "$propval";
-      else
-        echo "";
-      fi;
+      test "$propval" && echo "$propval" || echo "";
     }
   elif [ ! "$(getprop ro.build.type 2>/dev/null)" ]; then
     getprop() {
@@ -421,11 +401,6 @@ if [ $? != 0 -o -z "$(ls bin)" ]; then
   abort "Busybox setup failed. Aborting...";
 fi;
 
-if [ -f banner ]; then
-  ui_printfile banner;
-  ui_print " " " ";
-fi;
-
 KERNEL_STRING="$(file_getprop anykernel.sh kernel.string)";
 ui_print "$KERNEL_STRING";
 if [ -f version ]; then
@@ -435,13 +410,18 @@ if [ -f version ]; then
 fi;
 ui_print " " "AnyKernel3 by osm0sis @ xda-developers" " " " ";
 
+if [ -f banner ]; then
+  ui_printfile banner;
+  ui_print " " " ";
+fi;
+
 setup_env;
 
 do_devicecheck;
 do_versioncheck;
 do_levelcheck;
 
-ui_print "Installing...";
+ui_print "Installing Lithium...";
 CORE=$($BB grep -oE 'ak.*core.sh' anykernel.sh);
 test -f tools/$CORE || $BB ln -s $AKHOME/tools/ak*-core.sh $AKHOME/tools/$CORE;
 PATH="$AKHOME/bin:$PATH" home=$AKHOME $BB ash anykernel.sh $2;
@@ -458,4 +438,5 @@ if [ "$(file_getprop anykernel.sh do.cleanup)" == 1 ]; then
   cleanup;
 fi;
 
-ui_print " " " " "Done!";
+ui_print " " "Enjoy bruh with lithium kernel";
+
